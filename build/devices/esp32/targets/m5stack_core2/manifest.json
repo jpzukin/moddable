@@ -12,7 +12,6 @@
 		"screen": "ili9341",
 		"rotation": 180,
 		"touch": "ft6206",
-		"autorotate": 300
 	},
 	"defines": {
 		"i2c": {
@@ -55,9 +54,9 @@
 			"hz": 400000,
 			"sda": 21,
 			"scl": 22,
-			"dy": -40,
 			"threshold": 128,
-			"flipX": true,
+			"flipX": false,
+			"flipY": false,
 			"fitX": false,
 			"fitY": false
 		},

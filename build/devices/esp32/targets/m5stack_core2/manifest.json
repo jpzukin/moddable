@@ -10,7 +10,6 @@
 	],
 	"config": {
 		"screen": "ili9341",
-		"rotation": 180,
 		"touch": "ft6206",
 	},
 	"defines": {
@@ -24,7 +23,7 @@
 			"sck_pin": 18
 		},
 		"ili9341": {
-			"hz": 27000000,
+			"hz": 32000000,
 			"width": 320,
 			"height": 240,
 			"cs_pin": 5,
@@ -37,7 +36,7 @@
 				"0xC1, 1, 0x03,",
 				"0xB0, 1, 0xE0,",
 				"0xF6, 3, 0x00, 0x01, 0x01,",
-				"0x36, 1, 0xC8,",
+				"0x36, 1, 0x08,",
 				"0x3A, 1, 0x55,",
 				"0xB6, 3, 0x08, 0x82, 0x27,",
 				"0xE0, 15, 0x00 ,0x0C ,0x11 ,0x04 ,0x11 ,0x08 ,0x37 ,0x89 ,0x4C ,0x06 ,0x0C ,0x0A ,0x2E ,0x34 ,0x0F,",
@@ -66,8 +65,7 @@
 			"sampleRate": 11025,
 			"volume_divider": 1,
 			"i2s": {
-				"DAC": 1,
-				"DAC_CHANNEL": 3,
+				"DAC_CHANNEL": 1,
 				"bitsPerSample": 16,
 				"bck_pin": 12,
 				"lr_pin": 0,

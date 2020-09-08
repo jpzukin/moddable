@@ -2,9 +2,11 @@ import AXP192 from "axp192";
 import MPU6886 from "mpu6886";
 import AudioOut from "pins/audioout";
 import Resource from "Resource";
-//import I2C from "pins/i2c";
 import Timer from "timer";
 import config from "mc/config";
+
+const INTERNAL_I2C_SDA = 21;
+const INTERNAL_I2C_SCL = 22;
 
 const state = {
 	handleRotation: nop
@@ -12,9 +14,8 @@ const state = {
 
 export default function (done) {
 	global.power = new AXP192({
-		sda: 21,
-		scl: 22,
-		address: 0x34
+		sda: INTERNAL_I2C_SDA,
+		scl: INTERNAL_I2C_SCL,
 	});
 
 	global.power.setSpeakerEnable(true)
@@ -25,8 +26,8 @@ export default function (done) {
 	speaker.start();
 
 	state.accelerometerGyro = new MPU6886({
-		sda: 21,
-		scl: 22
+		sda: INTERNAL_I2C_SDA,
+		scl: INTERNAL_I2C_SCL
 	});
 
 	global.accelerometer = {
@@ -37,8 +38,6 @@ export default function (done) {
 		onreading: nop
 	}
 
-	//trace('The Temp:', state.accelerometerGyro.sampleTemp(), '\n');
-
 	accelerometer.start = function (frequency) {
 		accelerometer.stop();
 		state.accelerometerTimerID = Timer.repeat(id => {
@@ -47,8 +46,6 @@ export default function (done) {
 			});
 			const sample = state.accelerometerGyro.sample();
 			if (sample) {
-				sample.y *= -1;
-				sample.z *= -1;
 				state.handleRotation(sample);
 				accelerometer.onreading(sample);
 			}
@@ -96,16 +93,16 @@ export default function (done) {
 	if (config.autorotate && global.Application) {
 		state.handleRotation = function (reading) {
 			if (Math.abs(reading.y) > Math.abs(reading.x)) {
-				if (reading.y < -0.7 && application.rotation != 90) {
-					application.rotation = 90;
-				} else if (reading.y > 0.7 && application.rotation != 270) {
-					application.rotation = 270;
+				if (reading.y < -0.7 && application.rotation != 180) {
+					application.rotation = 180;
+				} else if (reading.y > 0.7 && application.rotation != 0) {
+					application.rotation = 0;
 				}
 			} else {
-				if (reading.x < -0.7 && application.rotation != 180) {
-					application.rotation = 180;
-				} else if (reading.x > 0.7 && application.rotation != 0) {
-					application.rotation = 0;
+				if (reading.x < -0.7 && application.rotation != 270) {
+					application.rotation = 270;
+				} else if (reading.x > 0.7 && application.rotation != 90) {
+					application.rotation = 90;
 				}
 			}
 		}

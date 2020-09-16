@@ -62,7 +62,7 @@ export default function (done) {
 			global.power.setLdoEnable(3, v)
 		}
 	}
-	bibratioin.write(true)
+	bibration.write(true)
 	Timer.set(() => {
 		bibration.write(false)
 	}, 600)

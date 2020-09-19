@@ -154,7 +154,7 @@ export default function (done) {
 		}
 		accelerometer.start(300);
 	}
-	
+
 	done();
 }
 

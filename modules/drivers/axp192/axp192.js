@@ -17,152 +17,138 @@
  *   along with the Moddable SDK Runtime.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import SMBus from 'pins/smbus';
-import Timer from 'timer';
+import SMBus from "pins/smbus";
 
-const kCHG_100mA = 0
+class DCDC {
+  #parent;
+  #register;
+  constructor({ register, parent }) {
+    this.#parent = parent;
+    this.#register = register;
+  }
+  set voltage(v) {
+    const vdata = v < 700 ? 0 : (v - 700) / 25;
+    this.#parent.writeByte(
+      this.#register,
+      (this.#parent.readByte(this.#register) & 0x80) | (vdata & 0x7f)
+    );
+  }
+  get voltage() {
+    return (this.#parent.readByte(this.#register) & 0x7f) * 25 + 700;
+  }
+}
 
-export default class AXP192 extends SMBus {
-	constructor(it) {
-		super(it);
-		this.initialize();
+class LDO {
+  #parent;
+  #register;
+  #offsetV;
+  #offsetEn;
+  constructor({ register, parent, offsetV, offsetEn }) {
+    this.#parent = parent;
+    this.#register = register;
+    this.#offsetV = offsetV;
+    this.#offsetEn = offsetEn;
+  }
+
+  set voltage(v) {
+    const vdata = v > 3300 ? 15 : v / 100 - 18;
+    const mask = ~(0xff << this.#offsetV);
+    this.#parent.writeByte(
+      this.#register,
+      (this.#parent.readByte(this.#register) & mask) | (vdata << this.#offsetV)
+    );
+  }
+
+  get voltage() {
+    return (
+      ((this.#parent.readByte(this.#register) >> this.#offsetV) + 18) * 100
+    );
+  }
+
+  set enable(enable) {
+    const mask = 0x01 << this.#offsetEn;
+    if (enable) {
+      this.#parent.writeByte(0x12, this.#parent.readByte(0x12) | mask);
+    } else {
+      this.#parent.writeByte(0x12, this.#parent.readByte(0x12) & ~mask);
+    }
+  }
+
+  get enable() {
+    return Boolean((this.#parent.readByte(0x12) >> this.#offsetEn) & 1);
+  }
+}
+
+class GPIO {
+	#register
+	#parent
+	#mask
+	constructor({ register, parent, offset }) {
+    this.#parent = parent;
+		this.#register = register;
+		this.#mask = 0x01 << offset;
 	}
 
-	//set led state(GPIO high active,set 1 to enable amplifier)
-	setSpeakerEnable(state) {
-		const register = 0x94;
-		const gpioBit = 0x04;
-		let data = this.readByte(register);
-		if (state) {
-			data |= gpioBit;
-		}
-		else {
-			data &= ~gpioBit;
-		}
-		this.writeByte(register, data);
+	get enable() {
+		return Boolean(this.#parent.readByte(this.#register) & this.#mask);
 	}
 
-	setVoltage(v) {
-		if (v >= 3000 && v <= 3400) {
-			this.setDCVoltage(0, v)
-		}
-	}
-
-	setLcdVoltage(v) {
-		if (v >= 2500 && v <= 3300) {
-			this.setDCVoltage(2, v)
-		}
-	}
-
-	setLdoVoltage(ch, v) {
-		const vdata = (v > 3300) ? 15 : (v / 100) - 18;
-		switch (ch) {
-			case 2:
-				this.writeByte(0x34, (this.readByte(0x28) & 0x0f) | vdata << 4)
-				break
-			case 3:
-				this.writeByte(0x34, (this.readByte(0x28) & 0xf0) | vdata)
-				break
-		}
-
-	}
-
-	setDCVoltage(ch, v) {
-		if (ch > 2) {
-			return
-		}
-		const vdata = (v < 700) ? 0 : (v - 700) / 25
-		let register
-		switch (ch) {
-			case 0:
-				register = 0x26
-				break
-			case 1:
-				register = 0x25
-				break
-			case 2:
-				register = 0x27
-				break
-		}
-		this.writeByte(register, (this.readByte(register) & 0x80) | (vdata & 0x7f))
-	}
-
-	setLdoEnable(n, enable) {
-		let mask = 0x01
-		if (n < 2 || n > 3) {
-			return
-		}
-		mask <<= n
-		if (enable) {
-			this.writeByte(0x12, this.readByte(0x12) | mask)
-		} else {
-			this.writeByte(0x12, this.readByte(0x12) & ~mask)
-		}
-	}
-
-	setLcdReset(enable) {
-		const register = 0x96
-		const gpioBit = 0x02
-		let data = this.readByte(register)
-		if (enable) {
-			data |= gpioBit
-		} else {
-			data &= ~gpioBit
-		}
-		this.writeByte(register, data)
-	}
-
-	setBusPowerMode(mode) {
-		if (mode == 0) {
-			this.writeByte(0x91, (this.readByte(0x91) & 0x0f) | 0xf0)
-			this.writeByte(0x90, (this.readByte(0x90) & 0xf8) | 0x02) //set GPIO0 to LDO OUTPUT , pullup N_VBUSEN to disable supply from BUS_5V
-			this.writeByte(0x12, (this.readByte(0x12) | 0x40)) //set EXTEN to enable 5v boost
-		} else {
-			this.writeByte(0x12, (this.readByte(0x12) & 0xbf)) //set EXTEN to disable 5v boost
-			this.writeByte(0x90, (this.readByte(0x90) & 0xf8) | 0x01) //set GPIO0 to float , using enternal pulldown resistor to enable supply from BUS_5VS
-		}
-	}
-
-	setChargeCurrent(state) {
-		this.writeByte(0x33, (this.readByte(0x33) & 0xf0) | (state & 0x0f))
-	}
-
-	/**
-	 * initialize axp192
-	 */
-	initialize() {
-		this.writeByte(0x30, (this.readByte(0x30) & 0x04) | 0x02) //AXP192 30H
-		this.writeByte(0x92, this.readByte(0x92) & 0xf8) //AXP192 GPIO1:OD OUTPUT
-
-		this.writeByte(0x93, this.readByte(0x93) & 0xf8) //AXP192 GPIO2:OD OUTPUT
-		this.writeByte(0x35, (this.readByte(0x35) & 0x1c) | 0xa3)//AXP192 RTC CHG
-		this.setVoltage(3350) // Voltage 3.35V
-		this.setLcdVoltage(2800) // LCD backlight voltage 2.80V
-		this.setLdoVoltage(2, 3300) //Periph power voltage preset (LCD_logic, SD card)
-		this.setLdoVoltage(3, 2000) //Vibrator power voltage preset
-		this.setLdoEnable(2, true)
-		this.setChargeCurrent(kCHG_100mA)
-
-		//AXP192 GPIO4
-		this.writeByte(0x95, (this.readByte(0x95) & 0x72) | 0x84)
-		this.writeByte(0x36, 0x4c)
-		this.writeByte(0x82, 0xff)
-
-		this.setLcdReset(0);
-		Timer.delay(20);
-		this.setLcdReset(1);
-		Timer.delay(20);
-
-		this.setBusPowerMode(0); //  bus power mode_output
-		Timer.delay(200);
-	}
-
-	/**
-	 * sets the screen brightness
-	 * @param {*} brightness brightness between 7-15
-	 */
-	setBrightness(brightness) {
-		const b = (brightness & 0x0f) << 4;
-		this.writeByte(0x28, b);
+	set enable(enable) {
+    let data = this.#parent.readByte(this.#register);
+    if (enable) {
+      data |= this.#mask;
+    } else {
+      data &= ~this.#mask;
+    }
+    this.#parent.writeByte(this.#register, data);
 	}
 }
+
+export default class AXP192 extends SMBus {
+  constructor(it) {
+    super({ address: 0x34, ...it });
+    this._dcdc1 = new DCDC({ register: 0x26, parent: this });
+    this._dcdc2 = new DCDC({ register: 0x23, parent: this });
+    this._dcdc3 = new DCDC({ register: 0x27, parent: this });
+    this._ldo2 = new LDO({
+      register: 0x34,
+      parent: this,
+      offsetV: 4,
+      offsetEn: 2,
+    });
+    this._ldo3 = new LDO({
+      register: 0x34,
+      parent: this,
+      offsetV: 0,
+      offsetEn: 3,
+		});
+		this._gpio0 = new GPIO({ register: 0x94, parent: this, offset: 0 })
+		this._gpio1 = new GPIO({ register: 0x94, parent: this, offset: 1 })
+		this._gpio2 = new GPIO({ register: 0x94, parent: this, offset: 2 })
+		this._gpio3 = new GPIO({ register: 0x96, parent: this, offset: 0 })
+		this._gpio4 = new GPIO({ register: 0x96, parent: this, offset: 1 })
+  }
+
+  set chargeCurrent(state) {
+    this.writeByte(0x33, (this.readByte(0x33) & 0xf0) | (state & 0x0f));
+  }
+}
+
+AXP192.CHARGE_CURRENT = {
+  Ch_100mA: 0b0000,
+  Ch_190mA: 0b0001,
+  Ch_280mA: 0b0010,
+  Ch_360mA: 0b0011,
+  Ch_450mA: 0b0100,
+  Ch_550mA: 0b0101,
+  Ch_630mA: 0b0110,
+  Ch_700mA: 0b0111,
+  Ch_780mA: 0b1000,
+  Ch_880mA: 0b1001,
+  Ch_960mA: 0b1010,
+  Ch_1000mA: 0b1011,
+  Ch_1080mA: 0b1100,
+  Ch_1160mA: 0b1101,
+  Ch_1240mA: 0b1110,
+  Ch_1320mA: 0b1111,
+};
